@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scroll Sequence</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      /* total scroll height = frames × px per frame */
+      height: calc(384 * 6px);
+    }
+
+    canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="c"></canvas>
+
+  <script>
+    // ── CONFIG ───────────────────────────────────────
+    const FRAMES_PER_PART = 96;   // 24fps × 4s
+    const PARTS           = 4;
+    const TOTAL           = FRAMES_PER_PART * PARTS; // 384
+    const PX_PER_FRAME    = 6;    // scroll px to advance 1 frame
+                                   // raise = slower scroll
+
+    // ── CANVAS ──────────────────────────────────────
+    const canvas = document.getElementById('c');
+    const ctx    = canvas.getContext('2d');
+
+    function resize() {
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+      draw(currentFrame); // redraw on resize
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // ── FRAME PATH ──────────────────────────────────
+    // global 0–383  →  "frames/part1/frame_001.jpg"
+    function path(i) {
+      const part  = Math.floor(i / FRAMES_PER_PART) + 1;
+      const local = (i % FRAMES_PER_PART) + 1;
+      const num   = String(local).padStart(3, '0');
+      return `frames/part${part}/frame_${num}.jpg`;
+    }
+
+    // ── IMAGE CACHE ──────────────────────────────────
+    const cache = new Array(TOTAL).fill(null);
+    let   currentFrame = 0;
+
+    // Sequential chain loader — loads 0,1,2,3... in order
+    function load(i) {
+      if (i >= TOTAL) return;
+      const img = new Image();
+      img.onload  = () => {
+        cache[i] = img;
+        if (i === 0) draw(0); // paint first frame immediately
+        load(i + 1);
+      };
+      img.onerror = () => load(i + 1); // skip missing
+      img.src = path(i);
+    }
+    load(0); // kick off
+
+    // ── DRAW ────────────────────────────────────────
+    // Cover-fit: fills canvas, centered, no black bars
+    function draw(i) {
+      const img = cache[i];
+      if (!img) return; // not loaded yet — keep previous frame
+
+      const cw = canvas.width,  ch = canvas.height;
+      const iw = img.naturalWidth, ih = img.naturalHeight;
+      const s  = Math.max(cw / iw, ch / ih);
+      const x  = (cw - iw * s) / 2;
+      const y  = (ch - ih * s) / 2;
+
+      ctx.drawImage(img, x, y, iw * s, ih * s);
+    }
+
+    // ── SCROLL HANDLER ──────────────────────────────
+    function onScroll() {
+      const scrolled = window.scrollY;
+      const frame    = Math.min(
+        Math.floor(scrolled / PX_PER_FRAME),
+        TOTAL - 1
+      );
+      if (frame !== currentFrame) {
+        currentFrame = frame;
+        draw(frame);
+      }
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+  </script>
+
+</body>
+</html>
